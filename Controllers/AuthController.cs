@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UniKnowledge.DTOs.Auth;
 using UniKnowledge.Services;
@@ -9,10 +10,12 @@ namespace UniKnowledge.Controllers;
 public class AuthController : ControllerBase
 {
     private readonly IAuthService _authService;
+    private readonly IPasswordResetService _passwordResetService;
 
-    public AuthController(IAuthService authService)
+    public AuthController(IAuthService authService, IPasswordResetService passwordResetService)
     {
         _authService = authService;
+        _passwordResetService = passwordResetService;
     }
 
     [HttpPost("register")]
@@ -41,6 +44,21 @@ public class AuthController : ControllerBase
         {
             return BadRequest(new { message = ex.Message });
         }
+    }
+    [HttpPost("forgot-password")]
+    [AllowAnonymous]
+    public async Task<ActionResult> ForgotPassword([FromBody] ForgotPasswordRequestDto dto)
+    {
+        await _passwordResetService.RequestPasswordResetAsync(dto.Email);
+        return Ok(new { message = "If email exists, OTP has been sent." });
+    }
+    [HttpPost("reset-password")]
+    [AllowAnonymous]
+    public async Task<ActionResult> ResetPassword([FromBody] ResetPasswordRequestDto dto)
+    {
+        var result = await _passwordResetService.ResetPasswordAsync(dto.Email, dto.OtpCode, dto.NewPassword);
+        return result ? Ok(new { message = "Password reset successfully" })
+                      : BadRequest(new { message = "Invalid OTP" });
     }
 }
 

@@ -59,6 +59,11 @@ builder.Services.AddScoped<IFileUploadService, FileUploadService>();
 // thêm Services UserProfile
 builder.Services.AddScoped<IUserProfileService, UserProfileService>();
 
+// thêm services password
+builder.Services.AddScoped<IEmailService, EmailService>();
+builder.Services.AddScoped<IPasswordResetService, PasswordResetService>();
+
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.

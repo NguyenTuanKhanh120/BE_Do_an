@@ -17,7 +17,7 @@ public class AppDbContext : DbContext
     public DbSet<Vote> Votes { get; set; }
     public DbSet<QuestionTag> QuestionTags { get; set; }
     public DbSet<Message> Messages { get; set; }
-
+    public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -151,6 +151,21 @@ public class AppDbContext : DbContext
                 .WithMany(u => u.ReceivedMessages)
                 .HasForeignKey(e => e.ReceiverId)
                 .OnDelete(DeleteBehavior.Restrict);
+        });
+        // PasswordResetToken configuration
+        modelBuilder.Entity<PasswordResetToken>(entity =>
+        {
+            entity.HasKey(e => e.Id);
+            entity.Property(e => e.Email).HasMaxLength(100).IsRequired();
+            entity.Property(e => e.OtpCode).HasMaxLength(255).IsRequired();
+
+            entity.HasOne(e => e.User)
+                .WithMany()
+                .HasForeignKey(e => e.UserId)
+                .OnDelete(DeleteBehavior.Cascade);
+
+            entity.HasIndex(e => e.Email);
+            entity.HasIndex(e => e.ExpiresAt);
         });
     }
 }
