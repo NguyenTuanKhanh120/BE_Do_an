@@ -56,6 +56,9 @@ builder.Services.AddScoped<IAnswerService, AnswerService>();
 builder.Services.AddScoped<IVoteService, VoteService>();
 builder.Services.AddScoped<IFileUploadService, FileUploadService>();
 
+// thêm Services UserProfile
+builder.Services.AddScoped<IUserProfileService, UserProfileService>();
+
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
