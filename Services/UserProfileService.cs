@@ -13,7 +13,7 @@ public interface IUserProfileService
     Task<UserProfileDto?> UpdateProfileAsync(int userId, UpdateProfileDto dto);
     Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto dto);
     Task<UserProfileDto?> UploadAvatarAsync(int userId, IFormFile file);
-
+    Task<List<UserProfileDto>> SearchUsersAsync(string searchTerm, int currentUserId, int limit = 20);
 }
 
 public class UserProfileService : IUserProfileService
@@ -197,5 +197,42 @@ public class UserProfileService : IUserProfileService
         await _context.SaveChangesAsync();
 
         return await GetUserProfileAsync(userId);
+    }
+
+    public async Task<List<UserProfileDto>> SearchUsersAsync(string searchTerm, int currentUserId, int limit = 20)
+    {
+        var query = _context.Users
+            .Include(u => u.Questions)
+            .Include(u => u.Answers)
+            .Where(u => u.UserId != currentUserId) // Exclude current user
+            .AsQueryable();
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            searchTerm = searchTerm.Trim().ToLower();
+            query = query.Where(u => 
+                u.Username.ToLower().Contains(searchTerm) ||
+                (u.FullName != null && u.FullName.ToLower().Contains(searchTerm)) ||
+                u.Email.ToLower().Contains(searchTerm)
+            );
+        }
+
+        var users = await query
+            .OrderBy(u => u.Username)
+            .Take(limit)
+            .ToListAsync();
+
+        return users.Select(u => new UserProfileDto
+        {
+            UserId = u.UserId,
+            Username = u.Username,
+            Email = u.Email,
+            FullName = u.FullName,
+            AvatarUrl = u.AvatarUrl,
+            Role = u.Role,
+            CreatedAt = u.CreatedAt,
+            QuestionCount = u.Questions.Count,
+            AnswerCount = u.Answers.Count
+        }).ToList();
     }
 }
