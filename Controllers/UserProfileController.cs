@@ -129,4 +129,14 @@ public class UserProfileController : ControllerBase
             return BadRequest(new { message = ex.Message });
         }
     }
+
+    [HttpGet("search")]
+    public async Task<ActionResult<List<UserProfileDto>>> SearchUsers([FromQuery] string? search = null, [FromQuery] int? limit = null)
+    {
+        var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        var searchTerm = search ?? string.Empty;
+        var limitValue = limit ?? 20;
+        var users = await _userProfileService.SearchUsersAsync(searchTerm, userId, limitValue);
+        return Ok(users);
+    }
 }
