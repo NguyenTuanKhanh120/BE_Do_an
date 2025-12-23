@@ -207,5 +207,201 @@ public class TagsController : ControllerBase
             total = await _context.Questions.CountAsync(q => q.QuestionTags.Any(qt => qt.TagId == id) && q.Status != "Hidden")
         });
     }
+
+    [HttpGet("suggest")]
+    public async Task<ActionResult<List<TagResponseDto>>> SuggestTags(
+        [FromQuery] string? query, 
+        [FromQuery] int limit = 10)
+    {
+        if (string.IsNullOrWhiteSpace(query) || query.Length < 2)
+        {
+            return Ok(new List<TagResponseDto>());
+        }
+
+        var tags = await _context.Tags
+            .Include(t => t.QuestionTags)
+            .Where(t => t.TagName.Contains(query))
+            .OrderByDescending(t => t.QuestionTags.Count)
+            .ThenBy(t => t.TagName)
+            .Take(limit)
+            .ToListAsync();
+
+        var result = tags.Select(t => new TagResponseDto
+        {
+            TagId = t.TagId,
+            TagName = t.TagName,
+            Description = t.Description,
+            QuestionCount = t.QuestionTags.Count
+        }).ToList();
+
+        return Ok(result);
+    }
+
+    [HttpGet("trending")]
+    public async Task<ActionResult<List<TagResponseDto>>> GetTrendingTags(
+        [FromQuery] int days = 7, 
+        [FromQuery] int limit = 20)
+    {
+        var cutoffDate = DateTime.UtcNow.AddDays(-days);
+        
+        var tags = await _context.Tags
+            .Include(t => t.QuestionTags)
+                .ThenInclude(qt => qt.Question)
+            .Select(t => new
+            {
+                Tag = t,
+                RecentQuestionCount = t.QuestionTags
+                    .Count(qt => qt.Question.CreatedAt >= cutoffDate && qt.Question.Status != "Hidden"),
+                TotalQuestionCount = t.QuestionTags.Count
+            })
+            .Where(x => x.RecentQuestionCount > 0)
+            .OrderByDescending(x => x.RecentQuestionCount)
+            .ThenByDescending(x => x.TotalQuestionCount)
+            .Take(limit)
+            .ToListAsync();
+
+        var result = tags.Select(x => new TagResponseDto
+        {
+            TagId = x.Tag.TagId,
+            TagName = x.Tag.TagName,
+            Description = x.Tag.Description,
+            QuestionCount = x.TotalQuestionCount
+        }).ToList();
+
+        return Ok(result);
+    }
+
+    [HttpPost("questions/filter")]
+    public async Task<ActionResult> FilterQuestionsByTags([FromBody] TagFilterDto dto)
+    {
+        var query = _context.Questions
+            .Include(q => q.User)
+            .Include(q => q.Category)
+            .Include(q => q.QuestionTags)
+                .ThenInclude(qt => qt.Tag)
+            .Include(q => q.Answers)
+            .Include(q => q.Votes)
+            .AsQueryable();
+
+        if (dto.TagIds != null && dto.TagIds.Any())
+        {
+            if (dto.Logic?.ToUpper() == "OR")
+            {
+                // Questions có ít nhất 1 trong các tags
+                query = query.Where(q => q.QuestionTags.Any(qt => dto.TagIds.Contains(qt.TagId)));
+            }
+            else
+            {
+                // Questions phải có TẤT CẢ các tags (AND)
+                query = query.Where(q => dto.TagIds.All(tagId => 
+                    q.QuestionTags.Any(qt => qt.TagId == tagId)));
+            }
+        }
+
+        query = query.Where(q => q.Status != "Hidden");
+
+        var total = await query.CountAsync();
+
+        var questions = await query
+            .OrderByDescending(q => q.CreatedAt)
+            .Skip((dto.Page - 1) * dto.PageSize)
+            .Take(dto.PageSize)
+            .ToListAsync();
+
+        var result = questions.Select(q => new
+        {
+            q.QuestionId,
+            q.Title,
+            q.Content,
+            q.ViewCount,
+            q.Status,
+            q.CreatedAt,
+            User = new { q.User.Username, q.User.AvatarUrl },
+            Category = q.Category != null ? new { q.Category.CategoryId, q.Category.CategoryName } : null,
+            Tags = q.QuestionTags.Select(qt => new { qt.Tag.TagId, qt.Tag.TagName }),
+            AnswerCount = q.Answers.Count,
+            VoteCount = q.Votes.Sum(v => v.VoteType)
+        }).ToList();
+
+        return Ok(new
+        {
+            questions = result,
+            total,
+            page = dto.Page,
+            pageSize = dto.PageSize,
+            totalPages = (int)Math.Ceiling(total / (double)dto.PageSize)
+        });
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpPut("{id}")]
+    public async Task<ActionResult<TagResponseDto>> UpdateTag(int id, [FromBody] UpdateTagDto dto)
+    {
+        var tag = await _context.Tags
+            .Include(t => t.QuestionTags)
+            .FirstOrDefaultAsync(t => t.TagId == id);
+
+        if (tag == null)
+        {
+            return NotFound(new { message = "Tag not found" });
+        }
+
+        // Check if tag name already exists (excluding current tag)
+        if (!string.IsNullOrEmpty(dto.TagName) && dto.TagName != tag.TagName)
+        {
+            if (await _context.Tags.AnyAsync(t => t.TagName == dto.TagName && t.TagId != id))
+            {
+                return BadRequest(new { message = "Tag name already exists" });
+            }
+        }
+
+        // Update properties if provided
+        if (!string.IsNullOrEmpty(dto.TagName))
+        {
+            tag.TagName = dto.TagName;
+        }
+
+        if (dto.Description != null)
+        {
+            tag.Description = dto.Description;
+        }
+
+        await _context.SaveChangesAsync();
+
+        var result = new TagResponseDto
+        {
+            TagId = tag.TagId,
+            TagName = tag.TagName,
+            Description = tag.Description,
+            QuestionCount = tag.QuestionTags.Count
+        };
+
+        return Ok(result);
+    }
+
+    [Authorize(Roles = "Admin")]
+    [HttpDelete("{id}")]
+    public async Task<ActionResult> DeleteTag(int id)
+    {
+        var tag = await _context.Tags
+            .Include(t => t.QuestionTags)
+            .FirstOrDefaultAsync(t => t.TagId == id);
+
+        if (tag == null)
+        {
+            return NotFound(new { message = "Tag not found" });
+        }
+
+        // Check if tag is being used
+        if (tag.QuestionTags.Any())
+        {
+            return BadRequest(new { message = $"Cannot delete tag because it has {tag.QuestionTags.Count} question(s) associated with it" });
+        }
+
+        _context.Tags.Remove(tag);
+        await _context.SaveChangesAsync();
+
+        return NoContent();
+    }
 }
 
