@@ -167,11 +167,11 @@ public class UserProfileService : IUserProfileService
             throw new Exception("File size must not exceed 2MB");
         }
 
-        // Create uploads directory if not exists
+        // Tạo thư mục uploads nếu chưa có
         var uploadsPath = Path.Combine(Directory.GetCurrentDirectory(), "wwwroot", "uploads", "avatars");
         Directory.CreateDirectory(uploadsPath);
 
-        // Delete old avatar if exists
+        // Delete  avatar cũ
         if (!string.IsNullOrEmpty(user.AvatarUrl))
         {
             var oldFileName = Path.GetFileName(user.AvatarUrl);
@@ -183,8 +183,8 @@ public class UserProfileService : IUserProfileService
         }
 
         // Save new file
-        var fileName = $"{userId}_{Guid.NewGuid()}{extension}";
-        var filePath = Path.Combine(uploadsPath, fileName);
+        var fileName = $"{userId}_{Guid.NewGuid()}{extension}"; // tạo tên file
+        var filePath = Path.Combine(uploadsPath, fileName);     // đường dẫn file
 
         using (var stream = new FileStream(filePath, FileMode.Create))
         {

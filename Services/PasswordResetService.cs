@@ -44,8 +44,8 @@ public class PasswordResetService : IPasswordResetService
 
         _context.PasswordResetTokens.Add(token);
         await _context.SaveChangesAsync();
-        await _emailService.SendOtpEmailAsync(email, otpPlain);
 
+        await _emailService.SendOtpEmailAsync(email, otpPlain);
         return true;
     }
 
@@ -66,6 +66,8 @@ public class PasswordResetService : IPasswordResetService
             .OrderByDescending(t => t.CreatedAt)
             .FirstOrDefaultAsync();
 
+
+        // kiểm tra otp
         if (token == null || !BCrypt.Net.BCrypt.Verify(otpCode, token.OtpCode))
             return false;
 
@@ -74,6 +76,8 @@ public class PasswordResetService : IPasswordResetService
 
         user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(newPassword);
         user.UpdatedAt = DateTime.UtcNow;
+
+        //đánh dấu token đã dùng
         token.IsUsed = true;
 
         await _context.SaveChangesAsync();

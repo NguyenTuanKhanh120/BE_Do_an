@@ -13,6 +13,7 @@ public interface IQuestionService
     Task<QuestionResponseDto?> UpdateQuestionAsync(int id, UpdateQuestionDto dto, int userId);
     Task<bool> DeleteQuestionAsync(int id, int userId);
     Task<bool> IncrementViewCountAsync(int id);
+
 }
 
 public class QuestionService : IQuestionService
@@ -186,6 +187,8 @@ public class QuestionService : IQuestionService
                 return false;
             }
 
+
+            // xóa file
             if (!string.IsNullOrEmpty(question.FileUrl))
             {
                 try
