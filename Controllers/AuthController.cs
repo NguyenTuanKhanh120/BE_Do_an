@@ -60,5 +60,19 @@ public class AuthController : ControllerBase
         return result ? Ok(new { message = "Password reset successfully" })
                       : BadRequest(new { message = "Invalid OTP" });
     }
-}
 
+    [HttpPost("google-login")]
+    [AllowAnonymous]
+    public async Task<ActionResult<AuthResponseDto>> GoogleLogin([FromBody] GoogleLoginDto dto)
+    {
+        try
+        {
+            var result = await _authService.GoogleLoginAsync(dto);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
+}
