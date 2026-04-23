@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using UniKnowledge.Data;
 using UniKnowledge.DTOs.User;
 using UniKnowledge.DTOs.Question;
@@ -9,20 +9,24 @@ namespace UniKnowledge.Services;
 public interface IUserProfileService
 {
     Task<UserProfileDto?> GetUserProfileAsync(int userId);
+    Task<PublicProfileDto?> GetPublicProfileAsync(int targetUserId, int? currentUserId);
     Task<List<QuestionResponseDto>> GetUserQuestionsAsync(int userId);
     Task<UserProfileDto?> UpdateProfileAsync(int userId, UpdateProfileDto dto);
     Task<bool> ChangePasswordAsync(int userId, ChangePasswordDto dto);
     Task<UserProfileDto?> UploadAvatarAsync(int userId, IFormFile file);
     Task<List<UserProfileDto>> SearchUsersAsync(string searchTerm, int currentUserId, int limit = 20);
+    Task<List<UserSearchDto>> SearchUsersLightAsync(string keyword, int limit = 10);
 }
 
 public class UserProfileService : IUserProfileService
 {
     private readonly AppDbContext _context;
+    private readonly IFollowService _followService;
 
-    public UserProfileService(AppDbContext context)
+    public UserProfileService(AppDbContext context, IFollowService followService)
     {
         _context = context;
+        _followService = followService;
     }
 
     public async Task<UserProfileDto?> GetUserProfileAsync(int userId)
@@ -89,6 +93,62 @@ public class UserProfileService : IUserProfileService
             VoteCount = q.Votes.Sum(v => v.VoteType),
             HasAcceptedAnswer = q.Answers.Any(a => a.IsAccepted)
         }).ToList();
+    }
+
+    public async Task<PublicProfileDto?> GetPublicProfileAsync(int targetUserId, int? currentUserId)
+    {
+        var user = await _context.Users
+            .Include(u => u.Questions)
+            .Include(u => u.Answers)
+            .FirstOrDefaultAsync(u => u.UserId == targetUserId);
+
+        if (user == null) return null;
+
+        var followerCount = await _followService.GetFollowerCountAsync(targetUserId);
+        var followingCount = await _followService.GetFollowingCountAsync(targetUserId);
+        var isFollowing = currentUserId.HasValue
+            ? await _followService.IsFollowingAsync(currentUserId.Value, targetUserId)
+            : false;
+
+        return new PublicProfileDto
+        {
+            UserId = user.UserId,
+            Username = user.Username,
+            FullName = user.FullName,
+            AvatarUrl = user.AvatarUrl,
+            Role = user.Role,
+            CreatedAt = user.CreatedAt,
+            QuestionCount = user.Questions.Count,
+            AnswerCount = user.Answers.Count,
+            FollowerCount = followerCount,
+            FollowingCount = followingCount,
+            IsFollowing = isFollowing
+        };
+    }
+
+    public async Task<List<UserSearchDto>> SearchUsersLightAsync(string keyword, int limit = 10)
+    {
+        if (string.IsNullOrWhiteSpace(keyword))
+            return new List<UserSearchDto>();
+
+        keyword = keyword.Trim().ToLower();
+
+        return await _context.Users
+            .Where(u =>
+                u.Username.ToLower().Contains(keyword) ||
+                (u.FullName != null && u.FullName.ToLower().Contains(keyword)) ||
+                u.Email.ToLower().Contains(keyword)
+            )
+            .OrderBy(u => u.Username)
+            .Take(limit)
+            .Select(u => new UserSearchDto
+            {
+                UserId = u.UserId,
+                FullName = u.FullName,
+                Username = u.Username,
+                AvatarUrl = u.AvatarUrl
+            })
+            .ToListAsync();
     }
 
     public async Task<UserProfileDto?> UpdateProfileAsync(int userId, UpdateProfileDto dto)

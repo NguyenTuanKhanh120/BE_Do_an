@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using UniKnowledge.DTOs.User;
@@ -13,10 +13,12 @@ namespace UniKnowledge.Controllers;
 public class UserProfileController : ControllerBase
 {
     private readonly IUserProfileService _userProfileService;
+    private readonly IFollowService _followService;
 
-    public UserProfileController(IUserProfileService userProfileService)
+    public UserProfileController(IUserProfileService userProfileService, IFollowService followService)
     {
         _userProfileService = userProfileService;
+        _followService = followService;
     }
 
     [HttpGet("me")]
@@ -107,6 +109,51 @@ public class UserProfileController : ControllerBase
         return Ok(questions);
     }
 
+    /// <summary>
+    /// GET /api/userprofile/{id}/public-profile
+    /// Returns profile info + follower count + isFollowing flag
+    /// </summary>
+    [HttpGet("{id}/public-profile")]
+    [AllowAnonymous]
+    public async Task<ActionResult<PublicProfileDto>> GetPublicProfile(int id)
+    {
+        // currentUserId is null if not authenticated (anonymous visitor)
+        int? currentUserId = null;
+        var userIdClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (userIdClaim != null)
+        {
+            currentUserId = int.Parse(userIdClaim);
+        }
+
+        var profile = await _userProfileService.GetPublicProfileAsync(id, currentUserId);
+
+        if (profile == null)
+        {
+            return NotFound(new { message = "User not found" });
+        }
+
+        return Ok(profile);
+    }
+
+    /// <summary>
+    /// POST /api/userprofile/{id}/toggle-follow
+    /// Toggle follow/unfollow for the target user
+    /// </summary>
+    [HttpPost("{id}/toggle-follow")]
+    public async Task<ActionResult> ToggleFollow(int id)
+    {
+        var currentUserId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+
+        try
+        {
+            var isNowFollowing = await _followService.ToggleFollowAsync(currentUserId, id);
+            return Ok(new { isFollowing = isNowFollowing });
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 
     [HttpPost("me/upload-avatar")]
     public async Task<ActionResult<UserProfileDto>> UploadAvatar(IFormFile file)
@@ -139,4 +186,16 @@ public class UserProfileController : ControllerBase
         var users = await _userProfileService.SearchUsersAsync(searchTerm, userId, limitValue);
         return Ok(users);
     }
-}
+
+    /// <summary>
+    /// GET /api/userprofile/search-light?keyword=xxx&limit=10
+    /// Lightweight search for navbar autocomplete (returns only Id, FullName, Username, Avatar)
+    /// </summary>
+    [HttpGet("search-light")]
+    [AllowAnonymous]
+    public async Task<ActionResult<List<UserSearchDto>>> SearchUsersLight([FromQuery] string keyword = "", [FromQuery] int limit = 10)
+    {
+        var users = await _userProfileService.SearchUsersLightAsync(keyword, limit);
+        return Ok(users);
+    }
+}

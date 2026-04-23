@@ -18,5 +18,9 @@ public class User
     public ICollection<Vote> Votes { get; set; } = new List<Vote>();
     public ICollection<Message> SentMessages { get; set; } = new List<Message>();
     public ICollection<Message> ReceivedMessages { get; set; } = new List<Message>();
+
+    // Follow relationships
+    public ICollection<Follow> Followers { get; set; } = new List<Follow>();  // Users who follow this user
+    public ICollection<Follow> Following { get; set; } = new List<Follow>();  // Users this user follows
 }
 

@@ -18,6 +18,7 @@ public class AppDbContext : DbContext
     public DbSet<QuestionTag> QuestionTags { get; set; }
     public DbSet<Message> Messages { get; set; }
     public DbSet<PasswordResetToken> PasswordResetTokens { get; set; }
+    public DbSet<Follow> Follows { get; set; }
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -166,6 +167,25 @@ public class AppDbContext : DbContext
 
             entity.HasIndex(e => e.Email);
             entity.HasIndex(e => e.ExpiresAt);
+        });
+
+        // Follow configuration
+        modelBuilder.Entity<Follow>(entity =>
+        {
+            entity.HasKey(e => e.FollowId);
+
+            entity.HasOne(e => e.Follower)
+                .WithMany(u => u.Following)
+                .HasForeignKey(e => e.FollowerId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            entity.HasOne(e => e.Following)
+                .WithMany(u => u.Followers)
+                .HasForeignKey(e => e.FollowingId)
+                .OnDelete(DeleteBehavior.Restrict);
+
+            // Each user can only follow another user once
+            entity.HasIndex(e => new { e.FollowerId, e.FollowingId }).IsUnique();
         });
     }
 }

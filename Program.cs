@@ -100,6 +100,7 @@ builder.Services.AddScoped<IFileUploadService, FileUploadService>();
 builder.Services.AddScoped<IMessageService, MessageService>();
 
 // thï¿½m Services UserProfile
+builder.Services.AddScoped<IFollowService, FollowService>();
 builder.Services.AddScoped<IUserProfileService, UserProfileService>();
 
 // thêm services password
