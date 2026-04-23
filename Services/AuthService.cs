@@ -91,6 +91,12 @@ public class AuthService : IAuthService
             throw new Exception("Invalid email or password");
         }
 
+        // Kiểm tra tài khoản bị khóa bởi Admin
+        if (user.IsLocked)
+        {
+            throw new Exception("Your account has been locked. Please contact the administrator.");
+        }
+
         var token = _jwtService.GenerateToken(user);
         var refreshToken = _jwtService.GenerateRefreshToken();
 
@@ -175,6 +181,12 @@ public class AuthService : IAuthService
                 user.UpdatedAt = DateTime.UtcNow;
                 await _context.SaveChangesAsync();
             }
+        }
+
+        // Kiểm tra tài khoản bị khóa bởi Admin
+        if (user.IsLocked)
+        {
+            throw new Exception("Your account has been locked. Please contact the administrator.");
         }
 
         // 5. Phát hành JWT hệ thống

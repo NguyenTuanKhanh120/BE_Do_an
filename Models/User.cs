@@ -9,6 +9,7 @@ public class User
     public string? FullName { get; set; }
     public string? AvatarUrl { get; set; }
     public string Role { get; set; } = "Student"; // Student, Admin
+    public bool IsLocked { get; set; } = false;    // true = tài khoản bị khóa bởi Admin
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? UpdatedAt { get; set; }
 
