@@ -261,5 +261,25 @@ public class QuestionsController : ControllerBase
             })
         });
     }
+
+    /// <summary>
+    /// POST /api/questions/{id}/share — Chia sẻ câu hỏi
+    /// Tạo bài mới với OriginalQuestionId trỏ về bài gốc
+    /// </summary>
+    [HttpPost("{id}/share")]
+    [Authorize]
+    public async Task<ActionResult<QuestionResponseDto>> ShareQuestion(int id, [FromBody] ShareQuestionDto dto)
+    {
+        try
+        {
+            var userId = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var result = await _questionService.ShareQuestionAsync(id, dto, userId);
+            return Ok(result);
+        }
+        catch (Exception ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+    }
 }
 

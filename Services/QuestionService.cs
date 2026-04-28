@@ -13,7 +13,7 @@ public interface IQuestionService
     Task<QuestionResponseDto?> UpdateQuestionAsync(int id, UpdateQuestionDto dto, int userId);
     Task<bool> DeleteQuestionAsync(int id, int userId);
     Task<bool> IncrementViewCountAsync(int id);
-
+    Task<QuestionResponseDto> ShareQuestionAsync(int originalQuestionId, ShareQuestionDto dto, int userId);
 }
 
 public class QuestionService : IQuestionService
@@ -36,6 +36,8 @@ public class QuestionService : IQuestionService
                 .ThenInclude(qt => qt.Tag)
             .Include(q => q.Answers)
             .Include(q => q.Votes)
+            .Include(q => q.OriginalQuestion)
+                .ThenInclude(oq => oq!.User)
             .AsQueryable();
 
         // Apply filters
@@ -85,6 +87,8 @@ public class QuestionService : IQuestionService
                 .ThenInclude(qt => qt.Tag)
             .Include(q => q.Answers)
             .Include(q => q.Votes)
+            .Include(q => q.OriginalQuestion)
+                .ThenInclude(oq => oq!.User)
             .FirstOrDefaultAsync(q => q.QuestionId == id);
 
         return question == null ? null : MapToDto(question);
@@ -188,7 +192,7 @@ public class QuestionService : IQuestionService
             }
 
 
-            // x�a file
+            // xóa file
             if (!string.IsNullOrEmpty(question.FileUrl))
             {
                 try
@@ -235,9 +239,50 @@ public class QuestionService : IQuestionService
         return true;
     }
 
+    /// <summary>
+    /// Chia sẻ câu hỏi: tạo Question mới với OriginalQuestionId trỏ về bài gốc
+    /// </summary>
+    public async Task<QuestionResponseDto> ShareQuestionAsync(int originalQuestionId, ShareQuestionDto dto, int userId)
+    {
+        // Kiểm tra bài gốc có tồn tại không
+        var originalQuestion = await _context.Questions
+            .Include(q => q.Category)
+            .FirstOrDefaultAsync(q => q.QuestionId == originalQuestionId);
+
+        if (originalQuestion == null)
+            throw new Exception("Original question not found.");
+
+        // Tạo bài share mới
+        var sharedQuestion = new Question
+        {
+            UserId = userId,
+            Title = originalQuestion.Title,  // Giữ tiêu đề bài gốc
+            Content = dto.Content ?? "",      // Lời bình của người share
+            CategoryId = originalQuestion.CategoryId,
+            OriginalQuestionId = originalQuestionId,  // Trỏ về bài gốc
+            Status = "Open",
+            CreatedAt = DateTime.UtcNow
+        };
+
+        _context.Questions.Add(sharedQuestion);
+        await _context.SaveChangesAsync();
+
+        // Reload đầy đủ để map DTO
+        var created = await _context.Questions
+            .Include(q => q.User)
+            .Include(q => q.Category)
+            .Include(q => q.QuestionTags).ThenInclude(qt => qt.Tag)
+            .Include(q => q.Answers)
+            .Include(q => q.Votes)
+            .Include(q => q.OriginalQuestion).ThenInclude(oq => oq!.User)
+            .FirstAsync(q => q.QuestionId == sharedQuestion.QuestionId);
+
+        return MapToDto(created);
+    }
+
     private QuestionResponseDto MapToDto(Question q)
     {
-        return new QuestionResponseDto
+        var dto = new QuestionResponseDto
         {
             QuestionId = q.QuestionId,
             Title = q.Title,
@@ -260,8 +305,27 @@ public class QuestionService : IQuestionService
             }).ToList(),
             AnswerCount = q.Answers.Count,
             VoteCount = q.Votes.Sum(v => v.VoteType),
-            HasAcceptedAnswer = q.Answers.Any(a => a.IsAccepted)
+            HasAcceptedAnswer = q.Answers.Any(a => a.IsAccepted),
+            OriginalQuestionId = q.OriginalQuestionId
         };
+
+        // Nếu là bài share → map thông tin trích dẫn bài gốc
+        if (q.OriginalQuestion != null)
+        {
+            dto.OriginalQuestion = new OriginalQuestionSummaryDto
+            {
+                QuestionId = q.OriginalQuestion.QuestionId,
+                Title = q.OriginalQuestion.Title,
+                ContentPreview = q.OriginalQuestion.Content.Length > 200
+                    ? q.OriginalQuestion.Content.Substring(0, 200) + "..."
+                    : q.OriginalQuestion.Content,
+                UserId = q.OriginalQuestion.UserId,
+                Username = q.OriginalQuestion.User.Username,
+                AvatarUrl = q.OriginalQuestion.User.AvatarUrl
+            };
+        }
+
+        return dto;
     }
 }
 

@@ -64,34 +64,57 @@ public class UserProfileService : IUserProfileService
                 .ThenInclude(qt => qt.Tag)
             .Include(q => q.Answers)
             .Include(q => q.Votes)
+            .Include(q => q.OriginalQuestion)
+                .ThenInclude(oq => oq!.User)
             .Where(q => q.UserId == userId)
             .OrderByDescending(q => q.CreatedAt)
             .ToListAsync();
 
-        return questions.Select(q => new QuestionResponseDto
-        {
-            QuestionId = q.QuestionId,
-            Title = q.Title,
-            Content = q.Content,
-            ViewCount = q.ViewCount,
-            Status = q.Status,
-            ImageUrl = q.ImageUrl,
-            FileUrl = q.FileUrl,
-            CreatedAt = q.CreatedAt,
-            UpdatedAt = q.UpdatedAt,
-            UserId = q.UserId,
-            Username = q.User.Username,
-            AvatarUrl = q.User.AvatarUrl,
-            CategoryId = q.CategoryId,
-            CategoryName = q.Category.CategoryName,
-            Tags = q.QuestionTags.Select(qt => new TagDto
+        return questions.Select(q => {
+            var dto = new QuestionResponseDto
             {
-                TagId = qt.TagId,
-                TagName = qt.Tag.TagName
-            }).ToList(),
-            AnswerCount = q.Answers.Count,
-            VoteCount = q.Votes.Sum(v => v.VoteType),
-            HasAcceptedAnswer = q.Answers.Any(a => a.IsAccepted)
+                QuestionId = q.QuestionId,
+                Title = q.Title,
+                Content = q.Content,
+                ViewCount = q.ViewCount,
+                Status = q.Status,
+                ImageUrl = q.ImageUrl,
+                FileUrl = q.FileUrl,
+                CreatedAt = q.CreatedAt,
+                UpdatedAt = q.UpdatedAt,
+                UserId = q.UserId,
+                Username = q.User.Username,
+                AvatarUrl = q.User.AvatarUrl,
+                CategoryId = q.CategoryId,
+                CategoryName = q.Category.CategoryName,
+                Tags = q.QuestionTags.Select(qt => new TagDto
+                {
+                    TagId = qt.TagId,
+                    TagName = qt.Tag.TagName
+                }).ToList(),
+                AnswerCount = q.Answers.Count,
+                VoteCount = q.Votes.Sum(v => v.VoteType),
+                HasAcceptedAnswer = q.Answers.Any(a => a.IsAccepted),
+                OriginalQuestionId = q.OriginalQuestionId
+            };
+
+            // Nếu là bài share → map thông tin bài gốc
+            if (q.OriginalQuestion != null)
+            {
+                dto.OriginalQuestion = new OriginalQuestionSummaryDto
+                {
+                    QuestionId = q.OriginalQuestion.QuestionId,
+                    Title = q.OriginalQuestion.Title,
+                    ContentPreview = q.OriginalQuestion.Content.Length > 200
+                        ? q.OriginalQuestion.Content.Substring(0, 200) + "..."
+                        : q.OriginalQuestion.Content,
+                    UserId = q.OriginalQuestion.UserId,
+                    Username = q.OriginalQuestion.User.Username,
+                    AvatarUrl = q.OriginalQuestion.User.AvatarUrl
+                };
+            }
+
+            return dto;
         }).ToList();
     }
 

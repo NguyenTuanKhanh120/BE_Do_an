@@ -187,6 +187,15 @@ public class AppDbContext : DbContext
             // Each user can only follow another user once
             entity.HasIndex(e => new { e.FollowerId, e.FollowingId }).IsUnique();
         });
+
+        // Question Share: quan hệ tự tham chiếu (self-referencing)
+        modelBuilder.Entity<Question>(entity =>
+        {
+            entity.HasOne(q => q.OriginalQuestion)
+                .WithMany(q => q.SharedQuestions)
+                .HasForeignKey(q => q.OriginalQuestionId)
+                .OnDelete(DeleteBehavior.Restrict); // Restrict tránh cascade loop
+        });
     }
 }
 
